@@ -9,6 +9,8 @@ Kompletna konfiguracja [blocky](https://github.com/0xERR0R/blocky) (DNS proxy + 
 | `config.yml` | Konfiguracja blocky (v0.35.0, zweryfikowana względem oficjalnego JSON-schema) |
 | `blocky.service` | Hardened unit systemd (użytkownik `blocky`, tylko `CAP_NET_BIND_SERVICE`) |
 | `README.md` | Niniejsza instrukcja instalacji |
+| `MONITORING.md` | Instrukcja monitoringu: Prometheus + Grafana (przeglądanie z innego komputera) |
+| `monitoring/prometheus.yml` | Gotowa konfiguracja scrape blocky dla Prometheusa |
 
 ## Co robi ta konfiguracja
 
