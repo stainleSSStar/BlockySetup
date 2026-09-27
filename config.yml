@@ -1,0 +1,112 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/0xERR0R/blocky/main/docs/config.schema.json
+# Konfiguracja blocky DNS dla sieci lokalnej (Raspberry Pi 5 / DietPi)
+# Zweryfikowana pod kątem blocky v0.35.0
+
+upstreams:
+  init:
+    # fast: blocky startuje natychmiast, test upstreamów idzie w tle
+    strategy: fast
+  # parallel_best: 2 losowe upstreamy na zapytanie, wygrywa najszybszy
+  strategy: parallel_best
+  timeout: 2s
+  groups:
+    default:
+      # DoH (DNS-over-HTTPS) — szyfrowane i szybkie w Polsce/Europie
+      - https://cloudflare-dns.com/dns-query
+      - https://dns.google/dns-query
+      - https://dns.quad9.net/dns-query
+      - https://odvr.nic.cz/dns-query
+      - https://dns.digitale-gesellschaft.ch/dns-query
+
+# Bootstrap: rozwiązuje nazwy hostów upstreamów i list blokujących
+# (adresy po IP, więc nie wymagają dodatkowych wpisów)
+bootstrapDns:
+  - upstream: https://1.1.1.1/dns-query
+  - upstream: https://9.9.9.9/dns-query
+
+blocking:
+  denylists:
+    ads:
+      - https://big.oisd.nl/
+      - https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/pro.txt
+    security:
+      - https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/tif.txt
+    gambling:
+      - https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/gambling.txt
+  clientGroupsBlock:
+    default:
+      - ads
+      - security
+      # odkomentuj, jeśli chcesz też blokować hazard:
+      # - gambling
+  blockType: zeroIp
+  blockTTL: 1m
+  loading:
+    refreshPeriod: 24h
+    downloads:
+      timeout: 60s
+      writeTimeout: 60s
+      readTimeout: 60s
+      readHeaderTimeout: 60s
+      attempts: 3
+      cooldown: 10s
+      cachePath: /var/cache/blocky/lists
+    concurrency: 8
+    strategy: failOnError
+    maxErrorsPerSource: 5
+
+caching:
+  minTime: 5m
+  maxTime: 30m
+  prefetching: true
+  prefetchExpires: 2h
+  prefetchThreshold: 5
+  cacheTimeNegative: 30m
+
+hostsFile:
+  sources:
+    - /etc/hosts
+  hostsTTL: 30m
+  filterLoopback: false
+
+rebindingProtection:
+  enable: true
+
+ede:
+  enable: true
+
+specialUseDomains:
+  enable: true
+
+dnssec:
+  validate: true
+
+ports:
+  dns: 53
+  http: 4000
+
+prometheus:
+  enable: true
+  path: /metrics
+
+log:
+  level: info
+  format: text
+  timestamp: true
+  privacy: false
+
+# Przykład: własne nazwy dla urządzeń w LAN (odkomentuj i dostosuj):
+#customDNS:
+#  mapping:
+#    printer.lan: 192.168.1.50
+#    nas.lan: 192.168.1.60
+
+# Przykład: zapytania o domenę lokalną kierowane do routera:
+#conditional:
+#  mapping:
+#    fritz.box: 192.168.1.1
+#    lan: 192.168.1.1
+
+# Przykład: reverse DNS klientów z routera:
+#clientLookup:
+#  upstream: 192.168.1.1
