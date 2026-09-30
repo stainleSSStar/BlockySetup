@@ -10,7 +10,6 @@ Group=blocky
 ExecStart=/usr/local/bin/blocky --config /etc/blocky/config.yml
 Restart=on-failure
 RestartSec=5
-RuntimeCacheDirectory=blocky
 CacheDirectory=blocky
 AmbientCapabilities=CAP_NET_BIND_SERVICE
 CapabilityBoundingSet=CAP_NET_BIND_SERVICE
