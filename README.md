@@ -12,6 +12,20 @@ Kompletna konfiguracja [blocky](https://github.com/0xERR0R/blocky) (DNS proxy + 
 | `MONITORING.md` | Instrukcja monitoringu: Prometheus + Grafana (przeglądanie z innego komputera) |
 | `monitoring/prometheus.yml` | Gotowa konfiguracja scrape blocky dla Prometheusa |
 
+## Instalacja w skrócie (spis kroków)
+
+1. [Pobierz pliki z repo na Raspberry Pi](#1-pobierz-pliki-z-repo-na-raspberry-pi)
+2. [Utwórz użytkownika i katalogi](#2-utwórz-użytkownika-i-katalogi)
+3. [Pobierz binarkę blocky](#3-pobierz-binarkę-blocky-arm64-dla-raspberry-pi-5)
+4. [Zainstaluj konfigurację i usługę systemd](#4-zainstaluj-konfigurację-i-usługę-systemd)
+5. [Zweryfikuj konfigurację przed startem](#5-zweryfikuj-konfigurację-przed-startem)
+6. [Uruchom i włącz autostart](#6-uruchom-i-włącz-autostart)
+7. [Zwolnij port 53 na DietPi (jeśli potrzebne)](#7-zwolnij-port-53-na-dietpi-jeśli-potrzebne)
+8. [Przekieruj DNS sieci na Raspberry Pi](#8-przekieruj-dns-sieci-na-raspberry-pi)
+9. [Zweryfikuj działanie](#weryfikacja-działania)
+
+Czas instalacji: ok. 10 minut. Wymagania: system Debianopodobny (DietPi, Debian, Ubuntu, Raspberry Pi OS) z dostępem do `sudo` i statycznym adresem IP hosta.
+
 ## Co robi ta konfiguracja
 
 - **Upstream DoH** (szyfrowane DNS): Cloudflare (najszybszy w Polsce), Google, Quad9, CZ.NIC ODVR, Digitale Gesellschaft — strategia `parallel_best` (2 losowe serwery na zapytanie, wygrywa najszybsza odpowiedź)
@@ -84,18 +98,22 @@ sudo systemctl enable --now blocky
 sudo systemctl status blocky
 ```
 
-### 7. Przekieruj DNS sieci na Raspberry Pi
+### 7. Zwolnij port 53 na DietPi (jeśli potrzebne)
 
-W routerze (opcja 1 — zalecana) ustaw serwer DNS DHCP na adres IP Raspberry Pi.
-Alternatywnie (opcja 2) na każdym urządzeniu ręcznie ustaw DNS na IP Raspberry Pi.
-
-**Ważne (DietPi):** aby blocky mógł bindować port 53, lokalny resolver `systemd-resolved`/`dnsmasq` nie może go zajmować. Na DietPi sprawdź:
+Aby blocky mógł bindować port 53, lokalny resolver `systemd-resolved`/`dnsmasq` nie może go zajmować. Sprawdź:
 
 ```sh
 sudo ss -lntup | grep :53
 ```
 
 Jeśli coś nasłuchuje na 53, wyłącz to w `dietpi-services` lub odinstaluj `dnsmasq` (`sudo apt remove dnsmasq`). Dodatkowo w DietPi ustaw statyczne IP i własny DNS (np. 1.1.1.1) dla samego systemu — **nie** adres Raspberry Pi (pętla!).
+
+### 8. Przekieruj DNS sieci na Raspberry Pi
+
+W routerze (opcja 1 — zalecana) ustaw serwer DNS DHCP na adres IP Raspberry Pi.
+Alternatywnie (opcja 2) na każdym urządzeniu ręcznie ustaw DNS na IP Raspberry Pi.
+
+> **Uwaga:** niektórzy ISP blokują lub przekierowują port 53 na własne serwery DNS. Jeśli po skierowaniu DNS na Raspberry Pi zapytania nie docierają, sprawdź logi (`journalctl -u blocky -f`).
 
 ## Weryfikacja działania
 
@@ -156,8 +174,8 @@ docker run -d --name blocky \
   --restart unless-stopped \
   -p 53:53/udp -p 53:53/tcp -p 4000:4000 \
   -v /etc/blocky/config.yml:/app/config.yml:ro \
-  -v blocky_cache:/app/cache \
-  spx01/blocky:latest
+  -v blocky_cache:/var/cache/blocky/lists \
+  ghcr.io/0xerr0r/blocky:latest
 ```
 
 ## Odinstalowanie
