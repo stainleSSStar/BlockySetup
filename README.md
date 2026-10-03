@@ -97,7 +97,7 @@ Po instalacji edytuj **aktywny** plik:
 
 ```bash
 nano /opt/blocky/config.yml
-docker exec blocky validate --config /app/config.yml && docker restart blocky
+docker exec blocky /app/blocky validate --config /app/config.yml && docker restart blocky
 ```
 
 Skrypt generuje dane dostępowe lokalnie w `/opt/blocky/monitoring`, poza repozytorium.

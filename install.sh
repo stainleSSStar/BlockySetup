@@ -103,10 +103,13 @@ else
 fi
 ready=false
 for ((attempt=0; attempt<60; attempt++)); do
-    if docker exec blocky healthcheck >/dev/null 2>&1; then ready=true; break; fi
+    if docker exec blocky /app/blocky healthcheck >/dev/null 2>&1; then ready=true; break; fi
     sleep 2
 done
-if ! $ready; then restore_config; docker restart blocky >/dev/null; exit 1; fi
+if ! $ready; then
+    echo 'Blocky nie przeszedł healthcheck. Sprawdź: docker logs --tail 100 blocky' >&2
+    restore_config; docker restart blocky >/dev/null; exit 1
+fi
 if ! docker exec blocky-db sh -c 'MYSQL_PWD="$MARIADB_PASSWORD" mariadb --user=blocky --database=blocky -e "SELECT 1 FROM log_entries LIMIT 0"' >/dev/null; then
     restore_config; docker restart blocky >/dev/null; exit 1
 fi
