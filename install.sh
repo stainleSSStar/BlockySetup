@@ -65,6 +65,10 @@ done
 install -m 0644 "$repo/monitoring/prometheus.yml" "$monitoring/prometheus.yml"
 mkdir -p "$monitoring/grafana"
 cp -R "$repo/monitoring/grafana/provisioning" "$repo/monitoring/grafana/dashboards" "$monitoring/grafana/"
+# DietPi/root may use umask 077; the Grafana container runs as UID 472.
+# These directories contain public dashboard definitions, not the .env secrets.
+find "$monitoring/grafana" -type d -exec chmod 755 {} +
+find "$monitoring/grafana" -type f -exec chmod 644 {} +
 log_opts=(--log-driver json-file --log-opt max-size=10m --log-opt max-file=3)
 replace() {
     if docker inspect "$1" >/dev/null 2>&1; then
@@ -127,8 +131,18 @@ docker run -d --name blocky-grafana --label io.blockysetup.managed=true --restar
     --mount type=bind,src="$monitoring/grafana/provisioning",dst=/etc/grafana/provisioning,readonly \
     --mount type=bind,src="$monitoring/grafana/dashboards",dst=/var/lib/grafana/dashboards,readonly \
     "$grafana_image"
-curl --retry 30 --retry-delay 2 --retry-connrefused -fsS http://127.0.0.1:9090/-/ready >/dev/null
-curl --retry 30 --retry-delay 2 --retry-connrefused -fsS http://127.0.0.1:3001/api/health >/dev/null
+wait_http() {
+    local url=$1 container=$2
+    for ((attempt=0; attempt<60; attempt++)); do
+        if curl --max-time 3 -fsS "$url" >/dev/null 2>&1; then return 0; fi
+        sleep 2
+    done
+    echo "$container nie odpowiada. Ostatnie logi:" >&2
+    docker logs --tail 40 "$container" >&2
+    return 1
+}
+wait_http http://127.0.0.1:9090/-/ready blocky-prometheus
+wait_http http://127.0.0.1:3001/api/health blocky-grafana
 echo 'Gotowe. Grafana: http://IP_RPI:3001 — login admin.'
 echo 'Nowa instalacja: hasło w /opt/blocky/monitoring/grafana.env (GF_SECURITY_ADMIN_PASSWORD).'
 echo 'Istniejąca Grafana: zachowano dotychczasowe hasło i dane.'
