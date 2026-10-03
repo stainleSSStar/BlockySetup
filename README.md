@@ -179,3 +179,32 @@ kopię danych z tego samego uruchomienia, a dopiero potem uruchomić poprzedni o
 
 Po aktualizacji używaj `update.sh`, nie instalatora przypiętego do Blocky v0.35.0.
 Lista blokowania odświeża się niezależnie, według `refreshPeriod` (domyślnie 24h).
+
+## Osobna aktualizacja Docker Engine
+
+```bash
+git -C /root/BlockySetup pull --ff-only && bash /root/BlockySetup/update-docker-engine.sh
+```
+
+Podgląd wersji i symulacja APT:
+
+```bash
+bash /root/BlockySetup/update-docker-engine.sh --check
+```
+
+Skrypt odświeża indeksy APT i aktualizuje wyłącznie już zainstalowane oficjalne pakiety
+Docker CE, CLI, containerd.io oraz dodatki Buildx, Compose i rootless (jeśli są zainstalowane).
+Wybiera wersje z `https://download.docker.com/linux/debian`, kanał `stable`. Nie przeprowadza
+`apt upgrade`, nie aktualizuje obrazów Blocky/Grafany/Prometheusa/MariaDB i nie usuwa blokad
+`apt-mark hold`. APT może zaktualizować lub doinstalować wymagane zależności.
+
+Przed instalacją zapisuje wersje pakietów, stan kontenerów i konfigurację Dockera
+w `/opt/docker-engine-backups/DATA/` (tylko root). To kopia konfiguracji, nie danych wolumenów
+ani plików DEB do automatycznego downgrade. Pakiety mogą zrestartować daemon i kontenery,
+co powoduje krótką przerwę DNS. Skrypt sprawdza działanie silnika, gotowość czterech usług
+BlockySetup i powrót pozostałych wcześniej działających kontenerów. Nie uruchamia kontenerów,
+które były zatrzymane przed aktualizacją. Wspólna blokada zapobiega równoczesnemu uruchomieniu
+aktualizacji silnika i kontenerów.
+
+`--check` odświeża indeksy APT, lecz nie instaluje pakietów ani nie restartuje usług.
+Skrypt wymaga lokalnego Docker CE, systemd i APT; nie migruje instalacji `docker.io`.
