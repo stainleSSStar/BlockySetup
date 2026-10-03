@@ -1,171 +1,136 @@
-# BlockySetup — serwer DNS blocky dla sieci lokalnej
+# BlockySetup — DNS i monitoring na DietPi
 
-Kompletna konfiguracja [blocky](https://github.com/0xERR0R/blocky) (DNS proxy + blokowanie reklam) dla Raspberry Pi 5 (8 GB) z DietPi / dowolnego systemu debianopodobnego (Debian, Ubuntu, Raspberry Pi OS).
+Konfiguracja Blocky v0.35.0 dla Raspberry Pi 5 / 64-bitowego DietPi.
+Instalator uruchamia cztery kontenery Docker: Blocky, Prometheus, Grafana OSS i MariaDB.
+Grafana automatycznie dostaje źródła danych oraz panele **Blocky — statystyki** i **Blocky — historia DNS**.
 
-## Co zawiera to repo
+## Instalacja od zera
 
-| Plik | Opis |
-|---|---|
-| `config.yml` | Konfiguracja blocky (v0.35.0, zweryfikowana względem oficjalnego JSON-schema) |
-| `blocky.service` | Hardened unit systemd (użytkownik `blocky`, tylko `CAP_NET_BIND_SERVICE`) |
-| `README.md` | Niniejsza instrukcja instalacji |
-| `MONITORING.md` | Instrukcja monitoringu: Prometheus + Grafana (przeglądanie z innego komputera) |
-| `monitoring/prometheus.yml` | Gotowa konfiguracja scrape blocky dla Prometheusa |
+W konsoli SSH jako root:
 
-## Co robi ta konfiguracja
-
-- **Upstream DoH** (szyfrowane DNS): Cloudflare (najszybszy w Polsce), Google, Quad9, CZ.NIC ODVR, Digitale Gesellschaft — strategia `parallel_best` (2 losowe serwery na zapytanie, wygrywa najszybsza odpowiedź)
-- **Blokowanie reklam** — listy:
-  - **oisd big** — `https://big.oisd.nl/` (~243 tys. domen, format Adblock Plus)
-  - **HaGezi Pro** — reklamy, trackery, telemetria, phishing, malware (~229 tys. domen)
-  - **HaGezi TIF** (Threat Intelligence Feeds) — dodatkowa warstwa bezpieczeństwa
-  - **HaGezi Gambling** — hazard (domyślnie wyłączony, patrz `config.yml`)
-- **DNSSEC** — walidacja kryptograficzna odpowiedzi
-- **Ochrona przed DNS rebinding** — odpowiedzi z prywatnymi adresami IP z internetu są blokowane
-- **Cache z prefetchingiem** — szybkie odpowiedzi na częste zapytania
-- **Odrzucanie nie-FQDN**, prywatne TLD (RFC 6762), EDE (Extended DNS Errors)
-- **Metrics Prometheus** — `http://<ip-rpi>:4000/metrics`
-- **Cache list na dysku** — `/var/cache/blocky/lists` (radzi sobie, gdy serwer list chwilowo nie odpowiada)
-
-## Instalacja na DietPi / Debian / Ubuntu
-
-### 1. Pobierz pliki z repo na Raspberry Pi
-
-```sh
-git clone https://github.com/stainleSSStar/BlockySetup.git
-cd BlockySetup
+```bash
+apt-get update
+apt-get install -y git ca-certificates
+git clone https://github.com/stainleSSStar/BlockySetup.git /root/BlockySetup
+cd /root/BlockySetup
+bash install.sh
 ```
 
-### 2. Utwórz użytkownika i katalogi
+Jeśli Docker nie jest zainstalowany, skrypt instaluje go przez `dietpi-software install 162`.
+Nie wykonuje aktualizacji systemu ani `apt upgrade`.
+Poza DietPi zainstaluj najpierw Docker Engine. Instalator wymaga systemd, apt, Python 3 z PyYAML, curl i ss.
 
-```sh
-sudo useradd --system --no-create-home --shell /usr/sbin/nologin blocky
-sudo mkdir -p /etc/blocky /var/cache/blocky
-sudo chown blocky:blocky /var/cache/blocky
+## Dodanie monitoringu do istniejącego Blocky
+
+Dla kontenera utworzonego według wcześniejszych instrukcji:
+
+```bash
+git clone https://github.com/stainleSSStar/BlockySetup.git /root/BlockySetup
+cd /root/BlockySetup
+bash install.sh --monitoring-only
 ```
 
-### 3. Pobierz binarkę blocky (arm64 dla Raspberry Pi 5)
+Jeśli checkout już istnieje, zamiast klonowania wykonaj `cd /root/BlockySetup && git pull --ff-only`.
 
-```sh
-BLOCKY_VERSION="v0.35.0"
-curl -sL -o /tmp/blocky.tar.gz \
-  "https://github.com/0xERR0R/blocky/releases/download/${BLOCKY_VERSION}/blocky_${BLOCKY_VERSION}_Linux_arm64.tar.gz"
-tar -xzf /tmp/blocky.tar.gz -C /tmp
-sudo install -m 0755 /tmp/blocky /usr/local/bin/blocky
-blocky version
+Instalator wymaga kontenera `blocky` v0.35.0 z `--network host`, pliku `/opt/blocky/config.yml`
+zamontowanego jako `/app/config.yml` i wolumenu `blocky_cache` w `/app/cache`.
+Porty DNS i HTTP w konfiguracji muszą wynosić odpowiednio 53 i 4000.
+
+Zachowuje upstreamy, listy i grupy klientów. Włącza eksport metryk oraz historię do MariaDB,
+ustawia cache na `/app/cache/lists`, a przed zmianą zapisuje kopię `/opt/blocky/config.yml.backup-*`.
+Istniejącą sekcję `queryLog` zastępuje, zamiast dopisywać powtórzony klucz YAML.
+Waliduje konfigurację i sprawdza DNS; przy nieudanym starcie przywraca poprzednią konfigurację.
+Włączenie historii wymaga jednego krótkiego restartu Blocky.
+
+Kontenery monitoringu o nazwach `blocky-db`, `blocky-prometheus` i `blocky-grafana` są odtwarzane
+z zachowaniem ich wolumenów i istniejących obrazów. Dotychczasowe hasło Grafany pozostaje aktywne.
+Skrypt sprawdza obrazy, wolumeny oraz hasło bazy przed zastąpieniem istniejących kontenerów.
+Nie usuwa wolumenów. Nie nadpisuje pliku `mariadb.env` z wcześniejszej instrukcji.
+
+## Panel WWW
+
+Otwórz `http://IP_RPI:3001`, login `admin`.
+Hasło nowej instalacji:
+
+```bash
+sed -n 's/^GF_SECURITY_ADMIN_PASSWORD=//p' /opt/blocky/monitoring/grafana.env
 ```
 
-### 4. Zainstaluj konfigurację i usługę systemd
+Jeżeli Grafana już wcześniej działała, użyj jej dotychczasowego hasła; powyższy plik go nie resetuje.
+W **Dashboards → Blocky** znajdziesz dwa gotowe panele. Nie trzeba dodawać źródeł danych ani importować ID.
+Statystyki zaczynają się od uruchomienia Prometheusa; historia DNS od włączenia `queryLog`.
+Historia jest zapisywana co 10 sekund i przechowywana 7 dni; panele odświeżają się co 15 sekund.
+Każda tabela pokazuje najwyżej 1000 najnowszych wpisów z wybranego zakresu czasu.
 
-```sh
-sudo install -m 0644 config.yml /etc/blocky/config.yml
-sudo install -m 0644 blocky.service /etc/systemd/system/blocky.service
+Prometheus przechowuje metryki maksymalnie 15 dni lub do osiągnięcia limitu 2 GB danych blokowych
+(WAL i bieżące dane mogą wymagać dodatkowego miejsca). Dane Grafany, metryk i bazy są w trwałych wolumenach.
+
+## Sieć i działanie DNS
+
+Ustaw stały IP RPi lub rezerwację DHCP. W routerze ustaw ten IP jako DNS przekazywany klientom przez DHCP.
+Klienci muszą mieć dostęp do RPi na UDP/TCP 53; przeglądarka do TCP 3001.
+Prometheus (`127.0.0.1:9090`) i MariaDB (`127.0.0.1:3307`) są dostępne lokalnie.
+Blocky API i metryki są na porcie 4000. Kontener DNS działa w host network.
+
+```bash
+dig @IP_RPI example.com +short
+dig @IP_RPI googlesyndication.com +short
+dig @IP_RPI ad2.doubleclick.net +short
 ```
 
-Jeśli chcesz dostosować konfigurację (np. własne urządzenia w `customDNS`), edytuj `/etc/blocky/config.yml`:
+Pierwszy test powinien zwrócić adres, dwa pozostałe `0.0.0.0`, o ile domeny nadal figurują na listach.
+Sam `doubleclick.net` lub `ad.doubleclick.net` nie jest wiarygodnym testem tych list.
 
-```sh
-sudo nano /etc/blocky/config.yml
+## Konfiguracja DNS
+
+`config.yml` zawiera:
+
+- upstreamy DoH: Cloudflare, Google, Quad9, CZ.NIC i Digitale Gesellschaft; `parallel_best`;
+- OISD big, HaGezi Pro i TIF; HaGezi Gambling jest zdefiniowana, ale nieprzypisana do klientów;
+- DNSSEC, ochronę przed DNS rebinding, cache z prefetchingiem;
+- metryki Prometheus i dyskowy cache list.
+
+Nie gwarantujemy, że konkretny upstream będzie najszybszy w każdej sieci.
+Definicja nieaktywnej listy może nadal powodować jej pobranie i zużycie pamięci.
+
+Po instalacji edytuj **aktywny** plik:
+
+```bash
+nano /opt/blocky/config.yml
+docker exec blocky validate --config /app/config.yml && docker restart blocky
 ```
 
-### 5. Zweryfikuj konfigurację przed startem
+Skrypt generuje dane dostępowe lokalnie w `/opt/blocky/monitoring`, poza repozytorium.
+Nie dodawaj aktywnej konfiguracji zawierającej hasło bazy do publicznego repo.
 
-```sh
-blocky validate --config /etc/blocky/config.yml
+## Diagnostyka
+
+```bash
+docker ps
+docker logs --tail 100 blocky
+docker logs --tail 100 blocky-db
+docker logs --tail 100 blocky-prometheus
+docker logs --tail 100 blocky-grafana
+curl -fsS http://127.0.0.1:4000/api/blocking/status
+curl -fsS http://127.0.0.1:9090/-/ready
+curl -fsS http://127.0.0.1:3001/api/health
 ```
 
-Dopóki polecenie nie zwróci sukcesu, nie startuj usługi — dzięki temu unikniesz problemów z błędnym znakiem w YAML.
+Więcej: [MONITORING.md](MONITORING.md).
 
-### 6. Uruchom i włącz autostart
+## Alternatywa: sam Blocky jako usługa systemd
 
-```sh
-sudo systemctl daemon-reload
-sudo systemctl enable --now blocky
-sudo systemctl status blocky
+`blocky.service` jest przeznaczony dla binarki `/usr/local/bin/blocky`, konfiguracji `/etc/blocky/config.yml`
+i użytkownika systemowego `blocky`. Używa `CacheDirectory=blocky` dla `/var/cache/blocky`.
+Nie uruchamiaj go jednocześnie z kontenerem na tym samym porcie 53.
+Ten wariant nie jest używany przez `install.sh`.
+
+## Weryfikacja repozytorium
+
+```bash
+bash -n install.sh
+python3 -m unittest discover -s tests -v
 ```
 
-### 7. Przekieruj DNS sieci na Raspberry Pi
-
-W routerze (opcja 1 — zalecana) ustaw serwer DNS DHCP na adres IP Raspberry Pi.
-Alternatywnie (opcja 2) na każdym urządzeniu ręcznie ustaw DNS na IP Raspberry Pi.
-
-**Ważne (DietPi):** aby blocky mógł bindować port 53, lokalny resolver `systemd-resolved`/`dnsmasq` nie może go zajmować. Na DietPi sprawdź:
-
-```sh
-sudo ss -lntup | grep :53
-```
-
-Jeśli coś nasłuchuje na 53, wyłącz to w `dietpi-services` lub odinstaluj `dnsmasq` (`sudo apt remove dnsmasq`). Dodatkowo w DietPi ustaw statyczne IP i własny DNS (np. 1.1.1.1) dla samego systemu — **nie** adres Raspberry Pi (pętla!).
-
-## Weryfikacja działania
-
-```sh
-# Zwykłe zapytanie (powinno zwrócić adresy)
-dig @<IP_RPI> google.com
-
-# Domena reklamowa (powinna zwrócić 0.0.0.0)
-dig @<IP_RPI> doubleclick.net
-```
-
-Statystyki i API (patrz [docs/api](https://github.com/0xERR0R/blocky/blob/main/docs/api/openapi.yaml)): `http://<IP_RPI>:4000/api/stats`, `http://<IP_RPI>:4000/api/blocking/status`, `http://<IP_RPI>:4000/api/cache/flush`
-
-## Aktualizacja list i restarty
-
-- Listy odświeżają się automatycznie co 24 h (`blocking.loading.refreshPeriod`).
-- Po zmianie konfiguracji: `sudo systemctl restart blocky`
-- Po aktualizacji binarki: `sudo systemctl restart blocky`
-
-## Blokowanie hazardu (opcjonalnie)
-
-W `/etc/blocky/config.yml` w sekcji `blocking.clientGroupsBlock` odkomentuj:
-
-```yaml
-    default:
-      - ads
-      - security
-      - gambling
-```
-
-## Aktualizacja blocky
-
-```sh
-BLOCKY_VERSION="v0.35.1"   # sprawdź najnowszą na stronie releases
-curl -sL -o /tmp/blocky.tar.gz \
-  "https://github.com/0xERR0R/blocky/releases/download/${BLOCKY_VERSION}/blocky_${BLOCKY_VERSION}_Linux_arm64.tar.gz"
-tar -xzf /tmp/blocky.tar.gz -C /tmp
-sudo install -m 0755 /tmp/blocky /usr/local/bin/blocky
-sudo systemctl restart blocky
-```
-
-## Rozwiązywanie problemów
-
-| Objaw | Rozwiązanie |
-|---|---|
-| `bind: address already in use` | Coś zajmuje port 53 (`sudo ss -lntup \| grep :53`) — wyłącz dnsmasq/systemd-resolved |
-| `permission denied` przy starcie | Sprawdź `AmbientCapabilities=CAP_NET_BIND_SERVICE` w unit file oraz czy usługa działa jako użytkownik `blocky` |
-| Listy się nie pobierają | Sprawdź `journalctl -u blocky -e`; katalog `/var/cache/blocky` musi naleść do `blocky:blocky` |
-| Niektóre strony nie działają | Dodaj domenę do allowlisty w `blocking.allowlists` lub usuń listę `security` z `clientGroupsBlock` |
-| Wolne odpowiedzi | Sprawdź `http://<IP_RPI>:4000/api/status` i logi; rozważ zmianę `strategy: random` w `upstreams` (mniej ruchu do 2 dostawców naraz) |
-
-## Alternatywa: Docker (opcjonalnie)
-
-Jeśli wolisz Dockera zamiast systemd:
-
-```sh
-docker run -d --name blocky \
-  --restart unless-stopped \
-  -p 53:53/udp -p 53:53/tcp -p 4000:4000 \
-  -v /etc/blocky/config.yml:/app/config.yml:ro \
-  -v blocky_cache:/app/cache \
-  spx01/blocky:latest
-```
-
-## Odinstalowanie
-
-```sh
-sudo systemctl disable --now blocky
-sudo rm /etc/systemd/system/blocky.service /etc/blocky/config.yml /usr/local/bin/blocky
-sudo rm -rf /etc/blocky /var/cache/blocky
-sudo userdel blocky
-sudo systemctl daemon-reload
-```
+Instalator przypina wersje nowych usług; ponowne uruchomienie zachowuje obrazy już istniejących kontenerów.
+Nie pobiera konfiguracji ani dashboardów z zewnętrznych serwisów podczas instalacji.

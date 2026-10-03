@@ -1,0 +1,94 @@
+{
+  "uid": "blocky-history",
+  "title": "Blocky — historia DNS",
+  "schemaVersion": 39,
+  "version": 1,
+  "timezone": "browser",
+  "tags": [
+    "blocky"
+  ],
+  "editable": false,
+  "refresh": "15s",
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Wszystkie zapytania",
+      "type": "table",
+      "datasource": {
+        "type": "mysql",
+        "uid": "blocky-mysql"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 14
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT request_ts AS time, client_ip AS klient, client_name AS nazwa, question_name AS domena, question_type AS pytanie, response_type AS typ, reason AS powod, answer AS odpowiedz, duration_ms AS czas_ms FROM log_entries WHERE $__timeFilter(request_ts) ORDER BY request_ts DESC LIMIT 1000"
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "filterable": true
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 2,
+      "title": "Zablokowane zapytania",
+      "type": "table",
+      "datasource": {
+        "type": "mysql",
+        "uid": "blocky-mysql"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 14,
+        "w": 24,
+        "h": 14
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT request_ts AS time, client_ip AS klient, client_name AS nazwa, question_name AS domena, question_type AS pytanie, response_type AS typ, reason AS powod, answer AS odpowiedz, duration_ms AS czas_ms FROM log_entries WHERE $__timeFilter(request_ts) AND response_type = 'BLOCKED' ORDER BY request_ts DESC LIMIT 1000"
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "filterable": true
+          }
+        },
+        "overrides": []
+      }
+    }
+  ]
+}
