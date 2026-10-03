@@ -134,3 +134,48 @@ python3 -m unittest discover -s tests -v
 
 Instalator przypina wersje nowych usług; ponowne uruchomienie zachowuje obrazy już istniejących kontenerów.
 Nie pobiera konfiguracji ani dashboardów z zewnętrznych serwisów podczas instalacji.
+
+## Aktualizacja istniejącego środowiska
+
+Jako root:
+
+```bash
+git -C /root/BlockySetup pull --ff-only && bash /root/BlockySetup/update.sh
+```
+
+Sam podgląd wybranych wersji, bez pobierania obrazów i restartowania kontenerów:
+
+```bash
+bash /root/BlockySetup/update.sh --check
+```
+
+Aktualizator wybiera najnowsze stabilne wydania Blocky, Prometheusa i Grafany z oficjalnych
+GitHub Releases. MariaDB dostaje najnowszą poprawkę w **obecnej serii major.minor**
+(np. 11.4.x pozostaje 11.4.x), z oficjalnego obrazu Docker Hub. Wydania testowe i obniżanie
+rozpoznanej wersji są odrzucane. Wymaga dostępu do GitHub API, Docker Hub i rejestrów obrazów;
+błąd pobrania metadanych lub obrazu przerywa pracę przed zatrzymaniem usług. Nie aktualizuje
+DietPi, pakietów APT ani Docker Engine.
+
+Pobiera wszystkie obrazy i waliduje aktywną konfigurację Blocky z istniejącymi montowaniami,
+w tym lokalnymi whitelist/blacklist w `/root/blocky`. Zachowuje porty, sieć, hasła, wolumeny,
+mocowania plików, politykę restartu i limity logów istniejących kontenerów. Nie kopiuje konfiguracji
+z repo na serwer. Usługi z niezmienionym obrazem nie są restartowane.
+
+Przed aktualizacją tworzy prywatny katalog `/opt/blocky-backups/DATA/`: konfiguracja, lokalne
+pliki Blocky, opis kontenerów i pełny zrzut SQL MariaDB. Przed zmianą obrazu MariaDB lub Grafany
+kopiuje także ich katalog danych po zatrzymaniu danego kontenera. Kopie i stare kontenery
+`NAZWA-before-DATA` nie są automatycznie usuwane. Udane stare kontenery mają wyłączony autostart.
+Kopie zawierają hasła i historię DNS: katalog dostępny tylko dla roota.
+
+Aktualizacja powoduje krótkie przerwy w usługach; DNS podczas wymiany Blocky, zapis historii
+podczas wymiany MariaDB. Grafana może potrzebować kilku minut na migrację bazy; skrypt czeka
+do 10 minut na gotowość każdej usługi. Nie przerywaj go podczas wymiany kontenerów.
+
+Gdy utworzenie kontenera się nie uda, przywraca nazwę i uruchamia poprzedni kontener.
+Jeśli nowa wersja już wystartowała, lecz nie przejdzie kontroli gotowości, skrypt przerywa dalsze
+aktualizacje i podaje ścieżkę kopii oraz nazwę starego kontenera. Nie wykonuje automatycznego
+downgrade: MariaDB lub Grafana mogły już zmigrować dane. Przy takim powrocie należy odtworzyć
+kopię danych z tego samego uruchomienia, a dopiero potem uruchomić poprzedni obraz.
+
+Po aktualizacji używaj `update.sh`, nie instalatora przypiętego do Blocky v0.35.0.
+Lista blokowania odświeża się niezależnie, według `refreshPeriod` (domyślnie 24h).
